@@ -1,0 +1,903 @@
+---
+title: "⚽<b>Macro Copa</b>"
+output: 
+  flexdashboard::flex_dashboard:
+    theme:
+      version: 5
+      bg: "#E7D0D7" # cor de fundo navbar
+      fg: "#fff" # cor constraste da navbar
+      body-color: "#8a1538" # cor texto do corpo (sidebar)
+      light: "#8a1538" # cor de fundo botão dropdown
+      primary: "#8a1538" # cor primária (valueBox)
+      secundary: "#D0A1AF" # cor secundária (demais elementos)
+      navbar-dark-brand-color: "#fff" # cor ativa do título na navbar
+      navbar-brand-font-size: 2rem # tamanho da fonte do título na navbar
+      navbar-dark-color: "#fff"
+      dropdown-bg: "#C48A9B" # cor de fundo menu dropdown botão
+      dropdown-link-color: "#8a1538" # cor da fonte menu dropdown botão
+      dropdown-header-color: "#fff"
+      enable-gradients: true # habilita cor em gradiente
+      base_font: 
+        google: Lato
+      heading_font:
+        google: Lato
+    social: [ "twitter", "facebook" ]
+    navbar:
+        - { title: "Análise Macro", href: "https://analisemacro.com.br/", align: right, target: "_blank"}
+        - { icon: "fa-at", href: "mailto:comercial@analisemacro.com.br", align: right }
+        - { icon: "fa-linkedin", href: "https://www.linkedin.com/company/an%C3%A1lise-macro/", align: right }
+    orientation: rows
+    vertical_layout: fill
+runtime: shiny
+---
+
+
+
+```{r global, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(readr)
+library(highcharter)
+library(dplyr)
+library(stringr)
+library(shinyWidgets)
+library(purrr)
+library(base64enc)
+library(knitr)
+
+shiny::addResourcePath(prefix = "images", directoryPath = "imgs")
+shiny::addResourcePath(prefix = "data", directoryPath = "data")
+macro_data <- readr::read_csv(file = "data/macro_data.csv")
+
+theme_macro <- function(base_color, light_color) {
+  highcharter::hc_theme_merge(
+    highcharter::hc_theme_smpl(),
+    highcharter::hc_theme(
+      chart = list(
+        style = list(fontFamily = "Lato"),
+        backgroundColor = base_color
+        ),
+      title = list(
+        style = list(
+          color = "#fff", 
+          fontSize = "28px", 
+          fontFamily = "Lato"
+          )
+        ),
+      subtitle = list(
+        style = list(color = "#fff", fontSize = "16px")),
+      legend = list(
+        itemStyle = list(color = "#fff", fontSize = "14px"),
+        itemHoverStyle = list(color = base_color)
+        ),
+      borderColor = base_color,
+      xAxis = list(
+        gridLineColor = "transparent",
+        labels = list(style = list(color = "#fff", fontSize = "14px")),
+        title = list(
+          style = list(
+            color = "#fff", 
+            fontSize = "14px", 
+            fontWeight = "bold"
+            )
+          )
+        ),
+      yAxis = list(
+        lineColor = "#fff", 
+        lineWidth = 1, 
+        gridLineDashStyle = "ShortDot",
+        labels = list(
+          style = list(color = "#fff", fontSize = "14px"), 
+          format = "{value:,.0f}"
+          ),
+        title = list(
+          style = list(
+            color = "#fff", 
+            fontSize = "14px", 
+            fontWeight = "bold"
+            )
+          )
+        ),
+      tooltip = list(
+        valueDecimals = 2,
+        headerFormat = "Período: <b>{point.key}</b><br>",
+        pointFormat = "{series.name}: <b>{point.y}</b>"
+        ),
+      caption = list(style = list(color = "#fff"), useHTML = TRUE),
+      credits = list(
+        style = list(color = "#fff"),
+        href = "https://analisemacro.com.br/",  
+        text = "<b>Dados</b>: Banco Mundial | <b>Elaboração</b>: Análise Macro",
+        useHTML = TRUE
+        )
+      )
+    )
+}
+
+filter_last <- function(
+    df, 
+    country_col = country_name, 
+    country_value, 
+    variable_col = variable, 
+    variable_value,
+    date_col = period,
+    value_col = value
+    ) {
+  df |>
+    dplyr::filter(
+      {{ country_col }} == country_value,
+      {{ variable_col }} == variable_value,
+      !is.na({{ value_col }})
+      ) |>
+    dplyr::arrange({{ date_col }}) |>
+    dplyr::slice_tail(n = 1)
+}
+
+pretty_vbox <- function(x, preffix = NULL, suffix = NULL, str_or_date = "str") {
+  
+  if (is.na(x) || is.null(x)) {
+    "Ops :("
+    } else if (str_or_date == "str") {
+    paste0(
+      preffix,
+      format(
+        x = round(x, 2), 
+        digits = 2, 
+        nsmall = 2L, 
+        big.mark = ".", 
+        decimal.mark = ","
+        ),
+      suffix
+      )
+  } else if (str_or_date == "date") {
+    format(x = x, format = "%Y")
+  }
+  
+}
+
+country_names <- unique(macro_data$country_name)
+country_flags <- paste0("imgs/", unique(macro_data$country_code), ".png")
+country_names <- country_names |>
+  setNames(nm = country_flags) |>
+  sort()
+
+variable_names <- stringr::str_remove(
+  string = unique(macro_data$variable), 
+  pattern = "\\s*\\([^\\)]+\\)"
+  )
+variable_names <- variable_names |>
+  setNames(nm = unique(macro_data$variable)) |>
+  sort()
+
+plt_subtitles <- c(
+  "Taxa de crescimento anual, preços de mercado, preços constantes de 2015 em US$",
+  "Unidades da moeda local em relação ao dólar americano, média anual",
+  "Percentual da força de trabalho total, média anual ponderada",
+  "Taxa anual medida pelo índice de preços ao consumidor (CPI)",
+  "Taxa de depósito bancário"
+  )
+plt_subtitles <- setNames(object = variable_names, nm = plt_subtitles)
+plt_ytitle <- setNames(
+    object = variable_names,
+    nm = c("%", "UMC/US$", "%", "%", "%")
+    )
+plt_tooltip <- c(
+  paste0(
+    "'O PIB é a soma do valor bruto adicionado por todos os produtores <br>residen",
+    "tes na economia mais quaisquer impostos sobre produtos e menos <br>quaisquer",
+    "subsídios não incluídos no valor dos produtos. É calculado sem fazer <br>ded",
+    "uções para depreciação de ativos fabricados ou para esgotamento e <br>degrad",
+    "ação de recursos naturais.'"
+    ),
+  paste0(
+    "'A taxa de câmbio oficial refere-se à taxa de câmbio determinada pelas <br>au",
+    "toridades nacionais ou à taxa determinada no mercado de câmbio <br>legalment",
+    "e sancionado. É calculado como uma média anual com base em médias <br>mensais.",
+    "<br>Observação: dados de países membros da União Européia podem conter dados",
+    "<br>de antes e depois da entrada.'"
+    ),
+  paste0(
+    "'O desemprego refere-se à parcela da força de trabalho que está sem <br>traba",
+    "lho, mas disponível e procurando emprego. Definições de força de <br>trabalh",
+    "o e do desemprego diferem de país para país.'"
+    ),
+  paste0(
+    "'A inflação medida pelo índice de preços ao consumidor é a variação<br>",
+    "percentual anual no custo para o consumidor médio de adquirir uma cesta<br> ",
+    "de bens e serviços que pode ser fixada ou alterada em intervalos específ", 
+    "cos, <br>como anualmente. A fórmula de Laspeyres é geralmente usada. Defini",
+    "ção<br> e cálculos podem variar conforme o país.'"
+    ),
+  paste0(
+    "'Taxa de juros de depósito é a taxa paga por bancos comerciais ou <br>similar",
+    "es por depósitos à vista, a prazo ou de poupança. Os termos e <br>condições ",
+    "associados a essas taxas diferem por país, no entanto, limitando sua <br>com",
+    "parabilidade.'"
+    )
+  )
+plt_tooltip <- setNames(object = variable_names, nm = plt_tooltip)
+```
+
+
+```{css}
+.boxchart1 {
+  background-color: #8a1538;
+}
+.boxchart2 {
+  background-color: #282f6b;
+}
+.h1a {
+  color: white;
+  text-align: center;
+}
+.bttn-default {
+  background-color: #8a1538 !important;
+  color: #E7D0D7 !important;
+  text-align: left;
+}
+```
+
+
+
+Row {.sidebar data-width=275}
+-----------------------------------------------------------------------
+
+**Entra em campo a seleção de dados macroeconômicos!** ⚽ 
+<br>Defina os times de países e indicadores, explore o jogo de visualizações e marque gol na análise de dados!
+
+```{r}
+shinyWidgets::pickerInput(
+  inputId  = "country",
+  label    = shiny::strong("Selecione os países:"),
+  choices  = unname(country_names),
+  selected = c("Brasil", "Argentina"),
+  multiple = TRUE,
+  options  =  list(
+    "multiple-separator" = " x ", 
+    "max-options-text" = "Limite atingido (máx. 2 países)!",
+    "max-options" = 2,
+    "live-search" = TRUE
+    ), 
+  choicesOpt = list(
+    content = purrr::map2(
+      .x = unname(country_names),
+      .y = names(country_names),
+      .f = ~paste0(
+        '<img src="', 
+        base64enc::dataURI(file = .y, mime = "image/png"),
+        '" width="20" height="15">&nbsp;&nbsp;',
+        .x
+        )
+      )
+    )
+  )
+
+shinyWidgets::pickerInput(
+  inputId  = "variable",
+  label    = shiny::strong("Selecione uma variável:"),
+  choices  = unname(variable_names),
+  selected = "PIB",
+  multiple = FALSE, 
+  choicesOpt = list(
+    icon = c(
+      "glyphicon glyphicon-stats", 
+      "glyphicon glyphicon-usd",
+      "glyphicon glyphicon-user",
+      "glyphicon glyphicon-shopping-cart", 
+      "glyphicon glyphicon-piggy-bank"
+      )
+    )
+  )
+
+shinyWidgets::radioGroupButtons(
+  inputId  = "plot",
+  label    = shiny::strong("Selecione o tipo do gráfico:"),
+  choices  = c(
+    `<i class='fa fa-bar-chart'></i>` = "column", 
+    `<i class='fa fa-line-chart'></i>` = "line", 
+    `<i class='fa fa-area-chart'></i>` = "area"
+    ),
+  selected = "line",
+  justified = TRUE
+  )
+
+shiny::strong("Baixar dados:")
+shinyWidgets::downloadBttn(
+  outputId = "download",
+  label = "Download CSV",
+  style = "simple",
+  color = "default",
+  size = "sm",
+  block = TRUE  
+  )
+output$download <- shiny::downloadHandler(
+  filename = "dados.csv",
+  content = function(con) {
+    write.csv(
+      x = macro_data, 
+      file = con, 
+      row.names = FALSE, 
+      fileEncoding = "latin1"
+      )
+    },
+  contentType = "text/csv"
+  )
+```
+<br>
+**Última atualização**: `r format(max(macro_data$indexed_at), format = "%d/%m/%Y")`.
+**Elaboração**: [Análise Macro](https://analisemacro.com.br/)
+
+```{r, fig.width=1.5}
+knitr::include_graphics("imgs/fifa2022.png")
+```
+
+
+
+Row {data-height=150}
+-----------------------------------------------------------------------
+
+### País 1 {.no-title .boxchart1}
+
+```{r}
+shiny::h1(
+  class = "h1a",
+  shiny::renderText({
+    shiny::req(input$country)
+    dplyr::if_else(is.na(input$country[1]), "", input$country[1])
+    })
+  )
+```
+
+### País 2 {.no-title .boxchart2}
+
+```{r}
+shiny::h1(
+  class = "h1a",
+  shiny::renderText({
+    shiny::req(input$country)
+    dplyr::if_else(is.na(input$country[2]), "", input$country[2])
+    })
+  )
+```
+
+
+
+Row
+-----------------------------------------------------------------------
+
+### Box {.no-title}
+
+```{r}
+flexdashboard::renderValueBox(
+  expr = {
+    
+    shiny::req(input$country[1])
+    
+    selected_country <- input$country[1]
+    
+    selected_data <- filter_last(
+        df             = macro_data, 
+        country_value  = selected_country, 
+        variable_value = "PIB (%, crescimento)"
+        )
+    
+    flexdashboard::valueBox(
+      value   = purrr::pluck(selected_data, "value") |> pretty_vbox(suffix = "%"), 
+      caption = paste0(
+        "PIB (crescimento, ", 
+        purrr::pluck(selected_data, "period") |> pretty_vbox(str_or_date = "date"),
+        ")"
+        ), 
+      icon    = "fa-chart-line",
+      color   = "#8a1538"
+      )
+    }
+  )
+```
+
+### Box {.no-title}
+
+```{r}
+flexdashboard::renderValueBox(
+  expr = {
+    
+    shiny::req(input$country[1])
+    
+    selected_country <- input$country[1]
+    
+    selected_data <- filter_last(
+        df             = macro_data, 
+        country_value  = selected_country, 
+        variable_value = "Taxa de Câmbio (UMC/US$, média)"
+        )
+    
+    flexdashboard::valueBox(
+      value   = purrr::pluck(selected_data, "value") |> pretty_vbox(), 
+      caption = paste0(
+        "Câmbio (UMC/US$, ", 
+        purrr::pluck(selected_data, "period") |> pretty_vbox(str_or_date = "date"),
+        ")"
+        ), 
+      icon    = "fa-area-chart",
+      color   = "#8a1538"
+      )
+    }
+  )
+```
+
+### Box {.no-title}
+
+```{r}
+flexdashboard::renderValueBox(
+  expr = {
+    
+    shiny::req(input$country[2])
+    
+    selected_country <- input$country[2]
+    
+    selected_data <- filter_last(
+        df             = macro_data, 
+        country_value  = selected_country, 
+        variable_value = "PIB (%, crescimento)"
+        )
+    
+    flexdashboard::valueBox(
+      value   = purrr::pluck(selected_data, "value") |> pretty_vbox(suffix = "%"), 
+      caption = paste0(
+        "PIB (crescimento, ", 
+        purrr::pluck(selected_data, "period") |> pretty_vbox(str_or_date = "date"),
+        ")"
+        ), 
+      icon    = "fa-chart-line",
+      color   = "#282f6b"
+      )
+    }
+  )
+```
+
+### Box {.no-title}
+
+```{r}
+flexdashboard::renderValueBox(
+  expr = {
+    
+    shiny::req(input$country[2])
+    
+    selected_country <- input$country[2]
+    
+    selected_data <- filter_last(
+        df             = macro_data, 
+        country_value  = selected_country, 
+        variable_value = "Taxa de Câmbio (UMC/US$, média)"
+        )
+    
+    flexdashboard::valueBox(
+      value   = purrr::pluck(selected_data, "value") |> pretty_vbox(), 
+      caption = paste0(
+        "Câmbio (UMC/US$, ", 
+        purrr::pluck(selected_data, "period") |> pretty_vbox(str_or_date = "date"),
+        ")"
+        ), 
+      icon    = "fa-area-chart",
+      color   = "#282f6b"
+      )
+    }
+  )
+```
+
+
+
+Row
+-----------------------------------------------------------------------
+
+### Box {.no-title}
+
+```{r}
+flexdashboard::renderValueBox(
+  expr = {
+    
+    shiny::req(input$country[1])
+    
+    selected_country <- input$country[1]
+    
+    selected_data <- filter_last(
+        df             = macro_data, 
+        country_value  = selected_country, 
+        variable_value = "Taxa de Desemprego (%)"
+        )
+    selected_value <- purrr::pluck(selected_data, "value") |> 
+      pretty_vbox(suffix = "%")
+    
+    flexdashboard::valueBox(
+      value   = selected_value, 
+      caption = dplyr::if_else(
+        selected_value == "Ops :(",
+        "Sem dados!",
+        paste0(
+          "Desemprego (", 
+          purrr::pluck(selected_data, "period") |> pretty_vbox(str_or_date = "date"),
+          ")"
+          )
+        ), 
+      icon    = "fa-users",
+      color   = "#8a1538"
+      )
+    }
+  )
+```
+
+### Box {.no-title}
+
+```{r}
+flexdashboard::renderValueBox(
+  expr = {
+    
+    shiny::req(input$country[1])
+    
+    selected_country <- input$country[1]
+    
+    selected_data <- filter_last(
+        df             = macro_data, 
+        country_value  = selected_country, 
+        variable_value = "Taxa de Inflação (%, CPI)"
+        )
+    selected_value <- purrr::pluck(selected_data, "value") |> 
+      pretty_vbox(suffix = "%")
+    
+    flexdashboard::valueBox(
+      value   = selected_value, 
+      caption = dplyr::if_else(
+        selected_value == "Ops :(",
+        "Sem dados!",
+        paste0(
+          "Inflação (anual, ", 
+          purrr::pluck(selected_data, "period") |> pretty_vbox(str_or_date = "date"),
+          ")"
+          )
+        ), 
+      icon    = "fa-usd",
+      color   = "#8a1538"
+      )
+    }
+  )
+```
+
+### Box {.no-title}
+
+```{r}
+flexdashboard::renderValueBox(
+  expr = {
+    
+    shiny::req(input$country[1])
+    
+    selected_country <- input$country[1]
+    
+    selected_data <- filter_last(
+        df             = macro_data, 
+        country_value  = selected_country, 
+        variable_value = "Taxa de Juros (%, depósito)"
+        )
+    selected_value <- purrr::pluck(selected_data, "value") |> 
+      pretty_vbox(suffix = "%")
+    
+    flexdashboard::valueBox(
+      value   = selected_value, 
+      caption = dplyr::if_else(
+        selected_value == "Ops :(",
+        "Sem dados!",
+        paste0(
+          "Juros (depósito, ", 
+          purrr::pluck(selected_data, "period") |> pretty_vbox(str_or_date = "date"),
+          ")"
+          )
+        ),
+      icon    = "fa-percentage",
+      color   = "#8a1538"
+      )
+    }
+  )
+```
+
+### Box {.no-title}
+
+```{r}
+flexdashboard::renderValueBox(
+  expr = {
+    
+    shiny::req(input$country[2])
+    
+    selected_country <- input$country[2]
+    
+    selected_data <- filter_last(
+        df             = macro_data, 
+        country_value  = selected_country, 
+        variable_value = "Taxa de Desemprego (%)"
+        )
+    selected_value <- purrr::pluck(selected_data, "value") |> 
+      pretty_vbox(suffix = "%")
+    
+    flexdashboard::valueBox(
+      value   = selected_value, 
+      caption = dplyr::if_else(
+        selected_value == "Ops :(",
+        "Sem dados!",
+        paste0(
+          "Desemprego (", 
+          purrr::pluck(selected_data, "period") |> pretty_vbox(str_or_date = "date"),
+          ")"
+          )
+        ), 
+      icon    = "fa-users",
+      color   = "#282f6b"
+      )
+    }
+  )
+```
+
+### Box {.no-title}
+
+```{r}
+flexdashboard::renderValueBox(
+  expr = {
+    
+    shiny::req(input$country[2])
+    
+    selected_country <- input$country[2]
+    
+    selected_data <- filter_last(
+        df             = macro_data, 
+        country_value  = selected_country, 
+        variable_value = "Taxa de Inflação (%, CPI)"
+        )
+    selected_value <- purrr::pluck(selected_data, "value") |> 
+      pretty_vbox(suffix = "%")
+    
+    flexdashboard::valueBox(
+      value   = selected_value, 
+      caption = dplyr::if_else(
+        selected_value == "Ops :(",
+        "Sem dados!",
+        paste0(
+          "Inflação (anual, ", 
+          purrr::pluck(selected_data, "period") |> pretty_vbox(str_or_date = "date"),
+          ")"
+          )
+        ), 
+      icon    = "fa-usd",
+      color   = "#282f6b"
+      )
+    }
+  )
+```
+
+### Box {.no-title}
+
+```{r}
+flexdashboard::renderValueBox(
+  expr = {
+    
+    shiny::req(input$country[2])
+    
+    selected_country <- input$country[2]
+    
+    selected_data <- filter_last(
+        df             = macro_data, 
+        country_value  = selected_country, 
+        variable_value = "Taxa de Juros (%, depósito)"
+        )
+    selected_value <- purrr::pluck(selected_data, "value") |> 
+      pretty_vbox(suffix = "%")
+    
+    flexdashboard::valueBox(
+      value   = selected_value, 
+      caption = dplyr::if_else(
+        selected_value == "Ops :(",
+        "Sem dados!",
+        paste0(
+          "Juros (depósito, ", 
+          purrr::pluck(selected_data, "period") |> pretty_vbox(str_or_date = "date"),
+          ")"
+          )
+        ),
+      icon    = "fa-percentage",
+      color   = "#282f6b"
+      )
+    }
+  )
+```
+
+
+
+Row
+-----------------------------------------------------------------------
+
+### Gráfico 1 {.no-title .boxchart1}
+
+```{r}
+highcharter_opts <- getOption("highcharter.lang")
+highcharter_opts$thousandsSep <- "."
+highcharter_opts$decimalPoint <- ","
+options(highcharter.lang = highcharter_opts)
+
+highcharter::renderHighchart({
+  
+  shiny::req(input$country[1], input$country[2], input$variable, input$plot)
+  
+  selected_country <- input$country
+  selected_var <- names(variable_names[variable_names == input$variable])
+  
+  plt_titles <- unname(variable_names[variable_names == input$variable])
+  plt_subtitles <- names(plt_subtitles[plt_subtitles == input$variable])
+  plt_ytitle <- names(plt_ytitle[plt_ytitle == input$variable])
+  plt_tooltip <- names(plt_tooltip[plt_tooltip == input$variable])
+  
+  plt_data <- macro_data |>
+    dplyr::filter(
+      country_name == selected_country[1], 
+      variable == selected_var
+      )
+  
+  if (nrow(plt_data) == 0) {
+    shinyWidgets::show_alert(
+      title = "Puts!",
+      text = shiny::tags$span(
+        shiny::tags$b("Sem dados disponíveis :("),
+        shiny::tags$br(), shiny::tags$br(),
+        "Indicador: ", selected_var, shiny::tags$br(),
+        "País: ", selected_country[1]
+        ),
+      type = "error",
+      btn_colors = "#8a1538",
+      closeOnClickOutside = TRUE,
+      showCloseButton = TRUE,
+      html = TRUE
+      )
+    } else plt_data |>
+    highcharter::hchart(
+      highcharter::hcaes(x = period, y = value),
+      type = input$plot,
+      name = selected_var,
+      showInLegend = FALSE,
+      lineWidth = 3,
+      color = "#E7D0D7"
+      ) |>
+    highcharter::hc_yAxis(title = list(text = plt_ytitle)) |> 
+    highcharter::hc_xAxis(title = NULL) |> 
+    highcharter::hc_navigator(enabled = TRUE) |>
+    highcharter::hc_title(text = plt_titles) |>
+    highcharter::hc_subtitle(text = plt_subtitles) |>  
+    highcharter::hc_credits(enabled = TRUE) |>
+    highcharter::hc_add_theme(theme_macro("#8a1538", "#E7D0D7")) |>
+    highcharter::hc_chart(
+      events = list(
+        load = highcharter::JS(
+          paste0(
+            "function() {
+              const chart = this
+              chart.title.on('mouseover', e => {
+                chart.titleTooltip = this.renderer.label(",
+                  plt_tooltip,
+                  ",
+                  11,
+                  45,
+                  'rectangle'
+                )
+                .css({
+                  color: '#8a1538',
+    							fontSize: 12
+                })
+                .attr({
+                  fill: '#C48A9B',
+                  padding: 8,
+                  r: 4,
+                })
+                .add()
+                .toFront()
+            })
+    
+            chart.title.on('mouseout', e => {
+              if (chart.titleTooltip) {
+                chart.titleTooltip.destroy()
+              }
+            })
+          }"
+          )
+          )
+        )
+      )
+  })
+```
+
+
+### Gráfico 2 {.no-title .boxchart2}
+
+```{r}
+highcharter::renderHighchart({
+  
+  shiny::req(input$country[1], input$country[2], input$variable, input$plot)
+  
+  selected_country <- input$country
+  selected_var <- names(variable_names[variable_names == input$variable])
+  
+  plt_titles <- unname(variable_names[variable_names == input$variable])
+  plt_subtitles <- names(plt_subtitles[plt_subtitles == input$variable])
+  plt_ytitle <- names(plt_ytitle[plt_ytitle == input$variable])
+  plt_tooltip <- names(plt_tooltip[plt_tooltip == input$variable])
+  
+  plt_data <- macro_data |>
+    dplyr::filter(
+      country_name == selected_country[2], 
+      variable == selected_var
+      )
+  
+  if (nrow(plt_data) == 0) {
+    shinyWidgets::show_alert(
+      title = "Puts!",
+      text = shiny::tags$span(
+        shiny::tags$b("Sem dados disponíveis :("),
+        shiny::tags$br(), shiny::tags$br(),
+        "Indicador: ", selected_var, shiny::tags$br(),
+        "País: ", selected_country[2]
+        ),
+      type = "error",
+      btn_colors = "#282f6b",
+      closeOnClickOutside = TRUE,
+      showCloseButton = TRUE,
+      html = TRUE
+      )
+    } else plt_data |>
+    highcharter::hchart(
+      highcharter::hcaes(x = period, y = value),
+      type = input$plot,
+      name = selected_var,
+      showInLegend = FALSE,
+      lineWidth = 3,
+      color = "#D4D5E1"
+      ) |>
+    highcharter::hc_yAxis(title = list(text = plt_ytitle)) |> 
+    highcharter::hc_xAxis(title = NULL) |> 
+    highcharter::hc_navigator(enabled = TRUE) |>
+    highcharter::hc_title(text = plt_titles) |>
+    highcharter::hc_subtitle(text = plt_subtitles) |>  
+    highcharter::hc_credits(enabled = TRUE) |>
+    highcharter::hc_add_theme(theme_macro("#282f6b", "#D4D5E1")) |>
+    highcharter::hc_chart(
+      events = list(
+        load = highcharter::JS(
+          paste0(
+            "function() {
+              const chart = this
+              chart.title.on('mouseover', e => {
+                chart.titleTooltip = this.renderer.label(",
+                  plt_tooltip,
+                  ",
+                  11,
+                  45,
+                  'rectangle'
+                )
+                .css({
+                  color: '#282f6b',
+    							fontSize: 12
+                })
+                .attr({
+                  fill: '#9397B5',
+                  padding: 8,
+                  r: 4,
+                })
+                .add()
+                .toFront()
+            })
+    
+            chart.title.on('mouseout', e => {
+              if (chart.titleTooltip) {
+                chart.titleTooltip.destroy()
+              }
+            })
+          }"
+          )
+          )
+        )
+      )
+  })
+```
+
