@@ -124,7 +124,7 @@ rmarkdown::run()
 
 You should obtain a screen similar to this as a result:
 
-![](imgs/macrocopa_printscreen.png)
+![](imgs/macrocopa_printscreen.PNG)
 
 ## Next steps
 
