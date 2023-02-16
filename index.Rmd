@@ -21,16 +21,14 @@ output:
         google: Lato
       heading_font:
         google: Lato
-    social: [ "twitter", "facebook" ]
     navbar:
-        - { title: "Análise Macro", href: "https://analisemacro.com.br/", align: right, target: "_blank"}
-        - { icon: "fa-at", href: "mailto:comercial@analisemacro.com.br", align: right }
-        - { icon: "fa-linkedin", href: "https://www.linkedin.com/company/an%C3%A1lise-macro/", align: right }
+        - { icon: "fa-github", href: "https://github.com/schoulten/macroview", align: right, target: "_blank" }
+        - { icon: "fa-linkedin", href: "https://www.linkedin.com/in/schoulten/", align: right, target: "_blank" }
+        - { icon: "fa-at", href: "mailto:fernando@fortietwo.com", align: right }
     orientation: rows
     vertical_layout: fill
 runtime: shiny
 ---
-
 
 
 ```{r global, include=FALSE}
@@ -239,7 +237,7 @@ plt_tooltip <- setNames(object = variable_names, nm = plt_tooltip)
 
 
 
-Row {.sidebar data-width=275}
+Row {.sidebar .no-title data-width=275}
 -----------------------------------------------------------------------
 
 **Entra em campo a seleção de dados macroeconômicos!** ⚽ 
@@ -325,7 +323,7 @@ output$download <- shiny::downloadHandler(
 ```
 <br>
 **Última atualização**: `r format(max(macro_data$indexed_at), format = "%d/%m/%Y")`.
-**Elaboração**: [Análise Macro](https://analisemacro.com.br/)
+**Elaboração**: [Fernando da Silva](https://fortietwo.com/)
 
 ```{r, fig.width=1.5}
 knitr::include_graphics("imgs/fifa2022.png")
@@ -333,7 +331,7 @@ knitr::include_graphics("imgs/fifa2022.png")
 
 
 
-Row {data-height=150}
+Row {data-height=150 .no-title}
 -----------------------------------------------------------------------
 
 ### País 1 {.no-title .boxchart1}
@@ -362,7 +360,7 @@ shiny::h1(
 
 
 
-Row
+Row {.no-title}
 -----------------------------------------------------------------------
 
 ### Box {.no-title}
@@ -487,7 +485,7 @@ flexdashboard::renderValueBox(
 
 
 
-Row
+Row {.no-title}
 -----------------------------------------------------------------------
 
 ### Box {.no-title}
@@ -708,7 +706,7 @@ flexdashboard::renderValueBox(
 
 
 
-Row
+Row {.no-title}
 -----------------------------------------------------------------------
 
 ### Gráfico 1 {.no-title .boxchart1}
