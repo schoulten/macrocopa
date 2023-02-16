@@ -22,7 +22,7 @@ output:
       heading_font:
         google: Lato
     navbar:
-        - { icon: "fa-github", href: "https://github.com/schoulten/macroview", align: right, target: "_blank" }
+        - { icon: "fa-github", href: "https://github.com/schoulten/", align: right, target: "_blank" }
         - { icon: "fa-linkedin", href: "https://www.linkedin.com/in/schoulten/", align: right, target: "_blank" }
         - { icon: "fa-at", href: "mailto:fernando@fortietwo.com", align: right }
     orientation: rows
@@ -104,8 +104,8 @@ theme_macro <- function(base_color, light_color) {
       caption = list(style = list(color = "#fff"), useHTML = TRUE),
       credits = list(
         style = list(color = "#fff"),
-        href = "https://analisemacro.com.br/",  
-        text = "<b>Dados</b>: Banco Mundial | <b>Elaboração</b>: Análise Macro",
+        href = "https://fortietwo.com/",  
+        text = "<b>Dados</b>: Banco Mundial | <b>Elaboração</b>: Fernando da Silva",
         useHTML = TRUE
         )
       )
